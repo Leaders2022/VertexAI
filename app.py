@@ -1,42 +1,40 @@
-import os
 import streamlit as st
 from google import genai
 from google.genai import types
 import requests
 import logging
 
-# --- Configuration ---
-# It's recommended to set your PROJECT_ID as an environment variable
-# for security and flexibility.
-PROJECT_ID = "dynamic-pivot-475316-n1"
+# --- Defining variables and parameters  ---
 REGION = "global"
+PROJECT_ID = "dynamic-pivot-475316-n1" # TO DO: Insert Project ID
 GEMINI_MODEL_NAME = "gemini-2.5-flash"
 
 temperature = .2
 top_p = 0.95
 
 system_instructions = """
-You are WanderBot, an expert travel assistant from a premier travel marketing company. Your primary goal is to provide an exceptional, helpful, and inspiring experience for users planning their travel.
+You are Agricare Assistant, an expert AI chatbot from Agricare. Your purpose is to help farmers and agricultural professionals with their questions about crop health and productivity.
 
-**Persona:**
-- **Friendly & Enthusiastic:** Your tone should be welcoming, positive, and encouraging. Make users feel excited about their travel plans.
-- **Knowledgeable & Professional:** Act as a seasoned travel expert. Provide accurate, detailed, and trustworthy information.
-- **Proactive & Helpful:** Anticipate user needs. If a user asks about a destination, offer to provide information on flights, hotels, and local attractions.
+Your Persona:
+- You are knowledgeable, professional, and supportive.
+- Your tone should be clear, encouraging, and easy to understand. Avoid overly technical jargon. If you must use a technical term, explain it simply.
+- You are an assistant from Agricare, a trusted agrovet company.
 
-**Core Capabilities:**
-1.  **Destination Expertise:** Answer questions about cities, countries, and attractions. Provide information on culture, history, best times to visit, local cuisine, and hidden gems.
-2.  **Travel Planning:** Help users build itineraries. Suggest activities, tours, and transportation options based on their interests, budget, and timeline.
-3.  **Booking Assistance:** Assist users in finding information about flights, accommodations, and rental cars. When a user expresses intent to book, guide them on how to use the available tools or where to go next.
-4.  **Practical Travel Advice:** Provide help with practical matters like visa requirements, packing lists, travel insurance, and currency exchange.
-5.  **Tool-Based Assistance:** You have access to tools to get real-time information (like weather). You MUST use these tools when the user's query requires current data. For example, if asked for the weather, you must call the weather tool.
+Your Primary Functions:
+1.  **Pest and Disease Management**: Help users identify, prevent, and manage common crop pests and diseases. Provide information on symptoms, causes, and control methods (including cultural, biological, and chemical options).
+2.  **Crop Yield Improvement**: Provide advice and best practices for increasing crop yields. This includes topics like soil health, proper fertilization, irrigation techniques, crop rotation, and selecting appropriate seed varieties.
 
-**Rules and Constraints:**
-- **NEVER Invent Information:** Do not make up flight numbers, booking confirmation codes, or prices. If you don't have the information, state that clearly and suggest a reliable way for the user to find it.
-- **DO NOT Handle Sensitive Data:** Never ask for, store, or process personally identifiable information (PII) such as credit card numbers, passport details, or home addresses. For actions that require this, direct the user to a secure booking portal or advise them to contact customer support.
-- **Be Conversational:** Engage in a natural, flowing conversation. Ask clarifying questions if a user's request is ambiguous (e.g., "Paris, Texas or Paris, France?").
-- **Promote the Brand:** Subtly reinforce that you are an assistant from a trusted travel company, here to ensure they have the best possible trip.
-- **Error Handling:** If a tool fails or you encounter an error, inform the user gracefully and suggest an alternative. For example: "I'm having trouble fetching the weather right now, but I can tell you about the typical climate in [destination] for this time of year."
+Guidelines for Your Responses:
+- **Be Specific and Actionable**: When possible, provide clear, step-by-step guidance. If a user's question is vague, ask clarifying questions to better understand their situation (e.g., "To help you better, could you tell me which crop you're growing and what the weather has been like?").
+- **Promote Agricare Solutions**: Where relevant and genuinely helpful, you can recommend Agricare products or services. Frame these as helpful suggestions, not aggressive sales pitches. For example, "For treating fungal infections like powdery mildew, a fungicide is often needed. Agricare offers a suitable product called 'AgriFungicide X' that could help."
+- **Safety First**: Always include a disclaimer to read and follow the manufacturer's label instructions when recommending chemical treatments like pesticides or herbicides. Emphasize user and environmental safety.
+
+Important Boundaries:
+- **No Definitive Diagnoses**: You cannot see the crop, so you cannot make a definitive diagnosis. Use phrases like "It sounds like it could be..." or "Common causes for these symptoms include...".
+- **Refer to Human Experts**: For complex or critical issues, or when in doubt, advise the user to consult a local agronomist or an Agricare field representative.
+- **Stay On-Topic**: If the user asks questions outside the scope of agriculture, crop management, pests, and diseases, politely decline to answer and steer the conversation back to your purpose. Do not answer questions about unrelated topics.
 """
+
 
 # --- Tooling ---
 # TODO: Define the weather tool function declaration
@@ -86,52 +84,61 @@ def get_current_temperature(location: str) -> str:
 
 
 # --- Initialize the Vertex AI Client ---
-if not PROJECT_ID:
-    st.error(
-        "GOOGLE_CLOUD_PROJECT environment variable not set. "
-        "Please set it to your Google Cloud Project ID."
-    )
-    st.stop()
-
-try:
-    client = genai.Client(
-        vertexai=True,
-        project=PROJECT_ID,
-        location=REGION,
-    )
-    print(f"VertexAI Client initialized successfully with model {GEMINI_MODEL_NAME}")
-except Exception as e:
-    st.error(f"Error initializing VertexAI client: {e}")
-    st.stop()
+if "client" not in st.session_state:
+    try:
+        client = genai.Client(
+            vertexai=True,
+            project=PROJECT_ID,
+            location=REGION,
+        )
+        st.session_state["client"] = client
+        print(f"VertexAI Client initialized successfully with model {GEMINI_MODEL_NAME}")
+    except Exception as e:
+        st.error(f"Error initializing VertexAI client: {e}")
+        st.stop()
 
 # TODO: Add the get_chat function here in Task 15.
 def get_chat(model_name: str):
     if f"chat-{model_name}" not in st.session_state:
-        #Tools
+
+        # TODO: Define the tools configuration for the model
         tools = types.Tool(function_declarations=[weather_function])
 
-        # Initialize a configuration object
+        # TODO: Define the generate_content configuration, including tools
         generate_content_config = types.GenerateContentConfig(
             temperature=temperature,
             top_p=top_p,
             system_instruction=[types.Part.from_text(text=system_instructions)],
-            tools=[tools] #Pass the tool definition here
+            tools=[tools] # Pass the tool definition here
         )
-        chat = client.chats.create(
+
+        # TODO: Create a new chat session
+        chat = st.session_state.client.chats.create(
             model=model_name,
             config=generate_content_config,
         )
+
         st.session_state[f"chat-{model_name}"] = chat
     return st.session_state[f"chat-{model_name}"]
 
 # --- Call the Model ---
 def call_model(prompt: str, model_name: str) -> str:
+    """
+    This function interacts with a large language model (LLM) to generate text based on a given prompt.
+    It maintains a chat session and handles function calls from the model to external tools.
+    """
     try:
+        # TODO: Get the existing chat session or create a new one.
         chat = get_chat(model_name)
+
         message_content = prompt
-        
+
+        # Start the tool-calling loop
         while True:
+            # TODO: Send the message to the model.
             response = chat.send_message(message_content)
+            
+            # Check if the model wants to call a tool
             has_tool_calls = False
             for part in response.candidates[0].content.parts:
                 if part.function_call:
@@ -139,28 +146,30 @@ def call_model(prompt: str, model_name: str) -> str:
                     function_call = part.function_call
                     logging.info(f"Function to call: {function_call.name}")
                     logging.info(f"Arguments: {function_call.args}")
-                    if function_call.name == "get_current_temperature":
-                        result = get_current_temperature(**function_call.args)
-                        function_response_part = types.Part.from_function_response(
-                            name=function_call.name,
-                            response={"result": result},
-                        )
-                        message_content = [function_response_part]
-                elif part.text:
-                    logging.info("No function call found in the response.")
-                    logging.info(response.text)
 
+                    # TODO: Call the appropriate function if the model requests it.
+                    if function_call.name == "get_current_temperature":
+                      result = get_current_temperature(**function_call.args)
+                    function_response_part = types.Part.from_function_response(
+                        name=function_call.name,
+                        response={"result": result},
+                    )
+                    message_content = [function_response_part]
+
+            # If no tool call was made, break the loop
             if not has_tool_calls:
                 break
 
+        # TODO: Return the model's final text response.
         return response.text
 
     except Exception as e:
         return f"Error: {e}"
 
+
 # --- Presentation Tier (Streamlit) ---
 # Set the title of the Streamlit application
-st.title("Travel Chat Bot")
+st.title("Agricare Chat Bot")
 
 # Initialize session state variables if they don't exist
 if "messages" not in st.session_state:
